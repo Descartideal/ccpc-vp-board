@@ -84,12 +84,14 @@ def validate_srk(data: dict) -> None:
             raise ValueError(f"第 {index + 1} 行缺少队伍信息")
 
 
-def make_board(data: dict, start_at: str) -> Path:
+def make_board(data: dict, start_at: str, mode: str = "ccpc") -> Path:
     validate_srk(data)
+    if mode not in {"ccpc", "icpc"}:
+        raise ValueError("赛制必须为 CCPC 或 ICPC")
     start = datetime.fromisoformat(start_at.replace("Z", "+00:00"))
     if start.tzinfo is None:
         raise ValueError("开始时间需要时区")
-    payload = json.dumps({"ranklist": data, "startAt": start.isoformat()}, ensure_ascii=False, separators=(",", ":"))
+    payload = json.dumps({"ranklist": data, "startAt": start.isoformat(), "mode": mode}, ensure_ascii=False, separators=(",", ":"))
     payload = payload.replace("<", "\\u003c").replace("&", "\\u0026")
     template = (ROOT / "board.html").read_text(encoding="utf-8")
     html = template.replace("/*__VP_DATA__*/", payload)
@@ -98,7 +100,7 @@ def make_board(data: dict, start_at: str) -> Path:
     if isinstance(title, dict):
         title = title.get("zh-CN") or title.get("fallback") or "VP榜单"
     safe = re.sub(r"[^\w\u4e00-\u9fff-]+", "_", str(title), flags=re.UNICODE).strip("_")[:48] or "VP榜单"
-    filename = f"{safe}_{start.strftime('%Y%m%d_%H%M')}_{uuid4().hex[:8]}.html"
+    filename = f"{safe}_{mode.upper()}_{start.strftime('%Y%m%d_%H%M')}_{uuid4().hex[:8]}.html"
     path = OUTPUT / filename
     path.write_text(html, encoding="utf-8")
     return path
@@ -145,7 +147,7 @@ class Handler(BaseHTTPRequestHandler):
                 data = request.get("data")
             else:
                 raise ValueError("请选择榜单链接或 JSON 文件")
-            path = make_board(data, request.get("startAt", ""))
+            path = make_board(data, request.get("startAt", ""), request.get("mode", "ccpc"))
             body = json.dumps({"filename": path.name, "url": f"/output/{quote(path.name)}"}, ensure_ascii=False).encode("utf-8")
             status = 200
         except Exception as exc:
