@@ -98,13 +98,34 @@ test('submission replay refreshes within a minute, and never exposes future resu
  assert.equal(b.row('alpha')[2].textContent,'0');
 });
 
-test('CCPC retains threshold reveal and the fixed 4-hour snapshot',()=>{
+test('CCPC retains threshold reveal, freezes scores, and tracks new submissions',()=>{
  const rows=freezeRows();while(rows.length<10)rows.push({user:{name:'empty'+rows.length},statuses:Array.from({length:5},()=>({result:null}))});
  const b=board('ccpc',rows,minute);
  assert.equal(b.nodes.get('#head').childNodes[0].childNodes.length,4);
  b.advance(240*minute);
- assert.equal(b.row('alpha')[6].className,'ac');
- const frozen=b.row('alpha').map(td=>td.textContent);
+ assert.equal(b.row('alpha')[6].className,'pending');
+ assert.equal(b.count(2).textContent,'通过 0 队');
+ const frozen=b.row('alpha').slice(0,4).map(td=>td.textContent);
  b.advance(299*minute);
- assert.deepEqual(b.row('alpha').map(td=>td.textContent),frozen);
+ assert.deepEqual(b.row('alpha').slice(0,4).map(td=>td.textContent),frozen);
+ assert.equal(b.row('alpha')[8].textContent,'? +1');
+});
+
+for(const mode of ['ccpc','icpc'])test(`${mode} shows submission times without leaking outcomes, including already solved problems`,()=>{
+ const rows=freezeRows();
+ rows[0].statuses[0].solutions.push(solution('WA',241.5));
+ rows[1].statuses[0].solutions.push(solution('AC',241.5));
+ const b=board(mode,rows,241*minute);
+ assert.equal(b.row('alpha')[5].childNodes[0].textContent,'最新 04:01:00');
+ assert.equal(b.row('beta')[5].childNodes[0].textContent,'最新 04:01:00');
+ assert(!b.row('alpha')[4].textContent.includes('?'));
+ b.advance(242*minute);
+ assert.equal(b.row('alpha')[5].childNodes[0].textContent,'最新 04:02:00');
+ assert.equal(b.row('alpha')[5].title,'封榜后的提交时间（结果隐藏）：\n04:01:00\n04:02:00');
+ assert.equal(b.row('alpha')[5].title,b.row('beta')[5].title);
+ for(const name of ['alpha','beta']){
+  assert(b.row(name)[4].textContent.includes('/ ? +1'));
+  assert.equal(b.row(name)[4].childNodes[0].textContent,'最新 04:01:30');
+  assert.equal(b.row(name)[2].textContent,'1');
+ }
 });
